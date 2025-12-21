@@ -83,5 +83,8 @@ func (s *SyncService) publishError(videoID, lang, msg string) {
 		Subtitles:    []domain.SubtitleItem{},
 	}
 	payload, _ := json.Marshal(result)
-	s.Publisher.Publish(SyncResultQueue, payload)
+	err := s.Publisher.Publish(SyncResultQueue, payload)
+	if err != nil {
+		return
+	}
 }
