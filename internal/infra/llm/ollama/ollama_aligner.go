@@ -67,7 +67,7 @@ JSON ALIGNMENT:
 
 	payload, _ := json.Marshal(reqData)
 
-	client := &http.Client{Timeout: 600 * time.Second}
+	client := &http.Client{Timeout: 1200 * time.Second}
 
 	resp, err := client.Post(p.BaseURL+"/api/generate", "application/json", bytes.NewBuffer(payload))
 	if err != nil {
