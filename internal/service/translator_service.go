@@ -29,28 +29,24 @@ func (p *TranslationProcessor) ProcessMessage(body []byte) {
 	var input domain.TranscriptionData
 	if err := json.Unmarshal(body, &input); err != nil {
 		log.Printf("❌ Invalid JSON: %s", err)
-
 		return
 	}
 
 	videoID := input.VideoID
-	if videoID == "" {
-		videoID = input.MongoID
-	}
 
-	fullText := input.FullText
-	if fullText == "" {
+	textToTranslate := input.OriginalText
+	if textToTranslate == "" {
 		var sb strings.Builder
 		for _, item := range input.Transcription {
 			sb.WriteString(item.Text + " ")
 		}
-		fullText = sb.String()
+		textToTranslate = sb.String()
 	}
 
-	log.Printf("📄 Processing Translation for Video %s | Lang: %s", videoID, input.TargetLang)
+	log.Printf("📄 Processing Translation for Video %s | %s -> %s", videoID, input.SourceLang, input.TargetLang)
 
 	const ChunkSize = 6000
-	chunks := splitTextByChars(fullText, ChunkSize)
+	chunks := splitTextByChars(textToTranslate, ChunkSize)
 
 	var finalTranslationBuilder strings.Builder
 	var translationErr error
@@ -62,6 +58,7 @@ func (p *TranslationProcessor) ProcessMessage(body []byte) {
 		var err error
 
 		for attempt := 1; attempt <= 3; attempt++ {
+
 			translatedChunk, err = p.Translator.TranslateText(chunk, input.SourceLang, input.TargetLang)
 			if err == nil {
 				break
@@ -86,16 +83,17 @@ func (p *TranslationProcessor) ProcessMessage(body []byte) {
 	}
 
 	finalText := finalTranslationBuilder.String()
-	mongoLangCode := utils.NormalizeLangCode(input.TargetLang)
 
-	p.publishSuccess(videoID, mongoLangCode, finalText)
+	finalLangLabel := utils.NormalizeLangCode(input.TargetLang)
+
+	p.publishSuccess(videoID, finalLangLabel, finalText)
 }
 
-func (p *TranslationProcessor) publishSuccess(videoID, langCode, text string) {
+func (p *TranslationProcessor) publishSuccess(videoID, langLabel, text string) {
 	result := domain.TranslationResult{
 		VideoID:        videoID,
 		Status:         "SUCCESS",
-		TargetLang:     langCode,
+		TargetLang:     langLabel,
 		TranslatedText: text,
 	}
 
