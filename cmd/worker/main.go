@@ -13,13 +13,12 @@ import (
 
 const (
 	TranslationCommandQueue = "video.translation.cmd"
-	SyncCommandQueue        = "video.sync.cmd"
 )
 
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		return
+		log.Println("⚠️ .env file not found, using system env variables")
 	}
 
 	ollamaHost := os.Getenv("OLLAMA_HOST")
@@ -32,8 +31,6 @@ func main() {
 
 	provider := ollama.NewOllamaProvider(ollamaHost, ollamaModel)
 
-	aligner := ollama.NewOllamaAligner(ollamaHost, ollamaModel)
-
 	log.Println("🐰 Connecting to RabbitMQ...")
 	rabbitProducer, err := queue.NewRabbitMQProducer(rabbitMQURL)
 	if err != nil {
@@ -43,8 +40,6 @@ func main() {
 
 	translationProcessor := service.NewTranslationProcessor(provider, rabbitProducer)
 
-	syncService := service.NewSyncService(aligner, rabbitProducer)
-
 	transConsumer, err := queue.NewRabbitMQConsumer(rabbitMQURL, TranslationCommandQueue)
 	if err != nil {
 		log.Fatal(err)
@@ -52,14 +47,7 @@ func main() {
 	defer transConsumer.Close()
 	transMsgs, _ := transConsumer.StartConsuming()
 
-	syncConsumer, err := queue.NewRabbitMQConsumer(rabbitMQURL, SyncCommandQueue)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer syncConsumer.Close()
-	syncMsgs, _ := syncConsumer.StartConsuming()
-
-	log.Println("🚀 Worker Started! Listening for separate Translation and Sync jobs...")
+	log.Println("🚀 Worker Started! Listening for separate Translation...")
 
 	forever := make(chan struct{})
 
@@ -69,18 +57,7 @@ func main() {
 			translationProcessor.ProcessMessage(d.Body)
 			err := d.Ack(false)
 			if err != nil {
-				return
-			}
-		}
-	}()
-
-	go func() {
-		for d := range syncMsgs {
-			log.Printf("📥 [Sync CMD] Received: %d bytes", len(d.Body))
-			syncService.ProcessSync(d.Body)
-			err := d.Ack(false)
-			if err != nil {
-				return
+				log.Printf("❌ Error acknowledging message: %v", err)
 			}
 		}
 	}()
