@@ -8,13 +8,11 @@ type SubtitleItem struct {
 }
 
 type TranscriptionData struct {
-	VideoID          string         `json:"videoId"`
-	MongoID          string         `json:"mongoId"`
-	OriginalFilename string         `json:"originalFilename"`
-	FullText         string         `json:"fullText"`
-	TargetLang       string         `json:"targetLang"`
-	Transcription    []SubtitleItem `json:"transcription"`
-	SourceLang       string         `json:"sourceLang"`
+	VideoID       string         `json:"videoId"`
+	OriginalText  string         `json:"originalText"`
+	SourceLang    string         `json:"sourceLang"`
+	TargetLang    string         `json:"targetLang"`
+	Transcription []SubtitleItem `json:"transcription"`
 }
 
 type TranslationResult struct {
