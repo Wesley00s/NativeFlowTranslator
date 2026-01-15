@@ -3,7 +3,7 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     networks:
-      - saas-network
+      - translator-network
     ports:
       - "11434:11434"
     volumes:
@@ -28,11 +28,12 @@ services:
     env_file:
       - .env
     networks:
-      - saas-network
+      - translator-network
 
 volumes:
   ollama_storage:
 
 networks:
-  saas-network:
-    external: true
+  translator-network:
+    name: translator-network
+    driver: bridge
