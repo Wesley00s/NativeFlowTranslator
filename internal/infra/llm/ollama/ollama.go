@@ -16,14 +16,18 @@ func (p *OllamaProvider) TranslateText(text string, sourceLang, targetLang strin
 ROLE: Expert Translator (%s -> %s).
 
 MISSION:
-Translate the following text.
-1. **Faithfulness:** Do not over-localize names or pronouns.
-   - Eg: "because of him or her" -> Target: "**por causa dele ou dela**" (NEVER use "fulano ou sicrano").
-2. Maintain the original tone and meaning.
-3. Use natural, fluid %s.
-4. Do NOT output explanations, just the translated text.
-5. Do NOT use specific formatting like IDs or Timestamps.
-`, sourceLang, targetLang, targetLang)
+Translate the input text preserving its original structure as a continuous stream of text.
+
+STRICT CONSTRAINTS:
+1. **FULL TRANSLATION:** Translate EVERY word. Do NOT leave English words (like "those", "the", "and") in the middle of the Portuguese sentence.
+2. **Faithfulness:** Maintain original tone. Do not over-localize proper names.
+3. **NO MARKDOWN:** Do NOT use bold (**text**), headers (##), or italics.
+4. **NO LISTS:** Do NOT use bullet points (-), dashes, or numbered lists. 
+5. **CONTINUOUS TEXT:** If the input is a paragraph, the output MUST be a paragraph. Use commas or semicolons to separate items, NOT new lines.
+6. **NO NEWLINES:** Do not add line breaks (\n) unless explicitly present in the source context as a paragraph break.
+7. **Pure Output:** Do NOT output explanations, only the translated text.
+8. **NATIVE GRAMMAR:** Ensure strict noun-gender agreement and correct article usage for the specific target dialect. The text must sound 100%% natural to a native speaker, correcting any source-text ambiguity.
+`, sourceLang, targetLang)
 
 	reqData := map[string]interface{}{
 		"model":  p.Model,
@@ -31,7 +35,7 @@ Translate the following text.
 		"prompt": text,
 		"stream": false,
 		"options": map[string]interface{}{
-			"temperature":    0.1,
+			"temperature":    0.3,
 			"num_ctx":        8192,
 			"num_predict":    4096,
 			"repeat_penalty": 1.1,
@@ -53,7 +57,6 @@ Translate the following text.
 	}(resp.Body)
 
 	if resp.StatusCode != 200 {
-
 		return "", fmt.Errorf("ollama error: status %d (check if model '%s' is pulled)", resp.StatusCode, p.Model)
 	}
 
@@ -65,6 +68,10 @@ Translate the following text.
 	}
 
 	result := strings.TrimSpace(ollamaResp.Response)
+	result = strings.ReplaceAll(result, "\n- ", ", ")
+	result = strings.ReplaceAll(result, "\n* ", ", ")
+	result = strings.ReplaceAll(result, "\n\n", " ")
+	result = strings.ReplaceAll(result, "\n", " ")
 
 	if result == "" {
 		return "", fmt.Errorf("ollama returned empty translation (model might be loading or failed)")
