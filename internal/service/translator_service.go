@@ -14,14 +14,16 @@ import (
 const ResultQueue = "video.translation.result"
 
 type TranslationProcessor struct {
-	Translator ports.LLMProvider
-	Publisher  ports.MessagePublisher
+	Translator      ports.LLMProvider
+	Publisher       ports.MessagePublisher
+	GlossaryService *GlossaryProcessor
 }
 
-func NewTranslationProcessor(t ports.LLMProvider, p ports.MessagePublisher) *TranslationProcessor {
+func NewTranslationProcessor(t ports.LLMProvider, p ports.MessagePublisher, g *GlossaryProcessor) *TranslationProcessor {
 	return &TranslationProcessor{
-		Translator: t,
-		Publisher:  p,
+		Translator:      t,
+		Publisher:       p,
+		GlossaryService: g,
 	}
 }
 
@@ -58,7 +60,6 @@ func (p *TranslationProcessor) ProcessMessage(body []byte) {
 		var err error
 
 		for attempt := 1; attempt <= 3; attempt++ {
-
 			translatedChunk, err = p.Translator.TranslateText(chunk, input.SourceLang, input.TargetLang)
 			if err == nil {
 				break
@@ -72,7 +73,6 @@ func (p *TranslationProcessor) ProcessMessage(body []byte) {
 			translationErr = err
 			break
 		}
-
 		finalTranslationBuilder.WriteString(translatedChunk + " ")
 	}
 
@@ -83,10 +83,20 @@ func (p *TranslationProcessor) ProcessMessage(body []byte) {
 	}
 
 	finalText := finalTranslationBuilder.String()
-
 	finalLangLabel := utils.NormalizeLangCode(input.TargetLang)
 
 	p.publishSuccess(videoID, finalLangLabel, finalText)
+
+	log.Println("🔗 Starting Glossary Generation sequence...")
+
+	glossaryReq := domain.GlossaryRequest{
+		VideoID:    videoID,
+		Text:       textToTranslate,
+		SourceLang: input.SourceLang,
+		TargetLang: input.TargetLang,
+	}
+
+	p.GlossaryService.Execute(glossaryReq)
 }
 
 func (p *TranslationProcessor) publishSuccess(videoID, langLabel, text string) {
