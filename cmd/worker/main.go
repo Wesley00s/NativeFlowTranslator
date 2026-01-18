@@ -38,23 +38,28 @@ func main() {
 	}
 	defer rabbitProducer.Close()
 
-	translationProcessor := service.NewTranslationProcessor(provider, rabbitProducer)
+	glossaryProcessor := service.NewGlossaryProcessor(provider, rabbitProducer)
+
+	translationProcessor := service.NewTranslationProcessor(provider, rabbitProducer, glossaryProcessor)
 
 	transConsumer, err := queue.NewRabbitMQConsumer(rabbitMQURL, TranslationCommandQueue)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer transConsumer.Close()
+
 	transMsgs, _ := transConsumer.StartConsuming()
 
-	log.Println("🚀 Worker Started! Listening for separate Translation...")
+	log.Println("🚀 Worker Started! Listening for Translations (+ Chained Glossary)...")
 
 	forever := make(chan struct{})
 
 	go func() {
 		for d := range transMsgs {
 			log.Printf("📥 [Translation CMD] Received: %d bytes", len(d.Body))
+
 			translationProcessor.ProcessMessage(d.Body)
+
 			err := d.Ack(false)
 			if err != nil {
 				log.Printf("❌ Error acknowledging message: %v", err)
