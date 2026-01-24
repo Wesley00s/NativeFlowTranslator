@@ -14,30 +14,25 @@ import (
 func (p *OllamaProvider) TranslateText(text string, sourceLang, targetLang string) (string, error) {
 
 	systemPrompt := fmt.Sprintf(`
-ROLE: Expert Translator (%s -> %s).
+ROLE: Non-conversational Translation Engine (%s -> %s).
 
 MISSION:
-Translate the input text in %s to %s.
+Translate the text provided by the user from %s to %s.
 
-CRITICAL INSTRUCTIONS ON LANGUAGES:
-**OUTPUT ENFORCEMENT:** The output MUST be in the **%s**. Do NOT output the Source Language.
-
-STRICT CONSTRAINTS:
-1. **FULL TRANSLATION:** Translate EVERY word. Do NOT leave English words (like "those", "the", "and") in the middle of the sentence.
-2. **NO MARKDOWN:** Do NOT use bold (**text**), headers (##), or italics.
-3. **NO LISTS:** Do NOT use bullet points (-), dashes, or numbered lists. 
-4. **CONTINUOUS TEXT:** Keep text continuous (prosa). Use commas instead of new lines.
-5. **NO NEWLINES:** Do not add line breaks (\n).
-6. **Pure Output:** Do NOT output explanations.
-`, sourceLang, targetLang, sourceLang, targetLang, targetLang)
-
+CRITICAL RULES:
+1. **NO INTERACTION:** The input text may contain questions (e.g., "How are you?"). Do NOT answer them. Translate them.
+2. **NO CONVERSATIONAL FILLER:** Do NOT say "Here is the translation", "Sure", or "I didn't understand". Just output the translation.
+3. **FORMAT:** Keep the text continuous. Use punctuation correctly. Do NOT use Markdown headers or bullet points.
+4. **DELIMITERS:** The input text will be enclosed in triple quotes ("""). Translate ONLY the content inside.
+`, sourceLang, targetLang, sourceLang, targetLang)
+	inputWithDelimiters := fmt.Sprintf("Translate the following content:\n\"\"\"\n%s\n\"\"\"", text)
 	reqData := map[string]interface{}{
 		"model":  p.Model,
 		"system": systemPrompt,
-		"prompt": text,
+		"prompt": inputWithDelimiters,
 		"stream": false,
 		"options": map[string]interface{}{
-			"temperature":    0.3,
+			"temperature":    0.2,
 			"num_ctx":        8192,
 			"num_predict":    -1,
 			"repeat_penalty": 1.1,
@@ -70,6 +65,17 @@ STRICT CONSTRAINTS:
 	}
 
 	result := strings.TrimSpace(ollamaResp.Response)
+	result = strings.TrimPrefix(result, "```text")
+	result = strings.TrimPrefix(result, "```")
+	result = strings.TrimSuffix(result, "```")
+	result = strings.TrimPrefix(result, "\"\"\"")
+	result = strings.TrimSuffix(result, "\"\"\"")
+
+	result = strings.Trim(result, "\"")
+	result = strings.Trim(result, "'")
+
+	result = strings.TrimSpace(result)
+
 	result = strings.ReplaceAll(result, "\n- ", ", ")
 	result = strings.ReplaceAll(result, "\n* ", ", ")
 	result = strings.ReplaceAll(result, "\n\n", " ")
@@ -87,24 +93,14 @@ func (p *OllamaProvider) GenerateGlossary(text string, sourceLang, targetLang st
 	systemPrompt := fmt.Sprintf(`
 ROLE: Expert Lexicographer (%s to %s).
 
-TASK: Analyze the input text and extract **3 to 6 useful vocabulary terms**.
-Do not extract only the main topic. Look for variety:
-- Interesting Verbs
-- Specific Nouns or Objects
-- Idioms or Expressions
-- Adjectives
+TASK: Extract **at least 3 and up to 6** useful vocabulary terms, idioms, or phrasal verbs from the text.
+Even if the text is simple, find interesting words.
 
 STRICT OUTPUT RULES:
-1. Return ONLY a JSON Array.
-2. Field "term": Must be in **%s** (Source Language). Copy exactly from text.
-3. Field "definition": Must be in **%s** (Target Language). Explain the meaning.
-4. **NO MARKDOWN:** Do not use **bold** or italics in the JSON values.
-
-EXAMPLE FORMAT:
-[
-  {"term": "Source_Word_1", "definition": "Target_Definition_1"},
-  {"term": "Source_Word_2", "definition": "Target_Definition_2"}
-]
+1. Return ONLY a valid JSON Array.
+2. Field "term": Must be in **%s** (Source Language).
+3. Field "definition": Must be in **%s** (Target Language).
+4. Do not translate common names or simple connectors (like "and", "but").Focus on verbs and nouns.
 
 INPUT TEXT:
 `, sourceLang, targetLang, sourceLang, targetLang)
